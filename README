@@ -1,0 +1,97 @@
+Guide to the Landmark Export (LME) script
+
+Authors: Stefano Nerozzi, Michael Christoffersen
+Last edit: 17-Oct-2017
+
+----------------------------------------------------------------------------------------------------------------------------------
+
+Q&A
+
+Why LME?
+We (Martians) have a set of 4 scripts that can translate a LM export file (normally .dat) in a GIS-readable ASCII file.
+However, these scripts have multiple issues that generate errors in the output files and lose some information.
+Also, they rely on many other pieces of code, making debugging and adding new features a really hard task.
+Mostly motivated by desperation, I decided to write my own script that can do the same thing but without the aforementioned issues.
+
+Why bash?
+And a little bit of C too. Bash, like other shell flavors, is in my opinion easier to read and write than other languages.
+It doesn't need a compiler, and I can use popular commands (e.g. grep, cut, awk, etc.) to process my data.
+I had to use some C to process and reorganise some files because bash was really too slow, even if very simple (thanks Michael!).
+
+You say one script, but there's two in addition to the C program!
+Yes, but the user only needs to run one of them. I needed the second script to process data quickly with GNU Parallel.
+Currently this script requires only 3 arguments, and after answering a few simple questions the user is free to go.
+
+Which data does it process?
+Currently, the script digests only PDS fpb201 picks. I will add compatibility to other products as needed.
+Navigation data is obtained from TREGs, which are the most universal and organized format that we currently have.
+In the future we should move towards a simpler, hopefully better ASCII format. I will adapt the script consequently.
+
+Which DEM should I use?
+The script can use any DEM geotiff that is properly formatted. It has some default DEMs, such as the global and north polar MOLA DEM.
+If you want to use your own, see the geotiff section below.
+Choose the DEM according to your needs and extent of your data. If your data falls outside the DEM, the elevation will be "nan".
+
+Do I need to use my wais account?
+Yes, I haven't tried running the script with my unix account, but it probably won't work. All our data is stored under wais, sorry.
+
+------------------------------------------------------------------------------------------------------------------------------------
+
+ARGUMENTS
+
+The script requires 3 arguments. All three are mandatory. Example: ./LME.sh -i NPLD_sn.dat -n Mars_is_cool -c 8
+
+-i  This is the input .dat file, the one Landmark generates when you export your picks.
+    Put this file in $MARS/orig/xtra/MRO1/PIK/lme/
+    You only need to provide the filename, the script will look it up in the directory above.
+    You can store it under a directory in lme/ as well (e.g. lme/stefano/Zerg_base_picks.dat)
+
+-n  This is the project name. It can be anything, choose your favorite name. DON'T use spaces or slashes.
+    When all the processing is done, your data will be stored in lme/project_name/
+
+-c  This is the number of cpu threads that the script will use when processing the bulk of the data.
+	My advice is to look up how many physical CPUs your system has with "cat /proc/cpuinfo".
+	Our systems have at least 4 physical CPUs. Princess has 4, Ares 8, Melt 12 and Freeze 18.
+	Keep in mind that Intel cpus use hyperthreading, doubling the number of threads.
+	
+-------------------------------------------------------------------------------------------------------------------------------------
+
+GEOTIFF DEM
+
+In order to calculate horizon elevations, the script uses a Digital Elevation Model (DEM) to reference the surface pick to topography.
+The script has a few default DEMs, all in geotiff format, a very common raster format.
+You can use your own geotiff DEM by following some instructions.
+
+-The file must be a geotiff ending in .tif, because the script will look for a .tif extension at some point.
+-It must have georeferencing information. To test it, use "gdalinfo name_of_file.tif".
+-It should cover most of your area of interest. If it doesn't, the elevation will be "null".
+
+-------------------------------------------------------------------------------------------------------------------------------------
+
+DEPENDENCIES, OTHER SCRIPT AND PROGRAM INVOLVED
+
+This script relies on two utilities: GDAL and GNU Parallel.
+GDAL is used to extract elevation data from the DEM (gdallocationinfo). Parallel to parallelize the data processing.
+In order to use them on UTIG systems, the wais user may need to set GDAL and PARALLEL with a simple command:
+
+set GDAL; set PARALLEL; repath
+
+The main script LM.sh calls a tiny C program, bin/file_organiser, to organise some files efficiently. The source code is bin/file_organiser.c.
+It also runs a second script, bin/process_profile.sh, in parallel to process the bulk of the pick data.
+
+--------------------------------------------------------------------------------------------------------------------------------------
+
+INTERRUPTING THE SCRIPT
+
+The script may be interrupted at any time, but doing so may leave some temporary files in a couple of locations. Please clean them out.
+
+/dev/shm/LME_RAMDISK/your-project-name
+$MARS/orig/xtra/MRO/PIK/lme/your-project-name
+
+--------------------------------------------------------------------------------------------------------------------------------------
+
+SUGGESTIONS
+
+If you need your export processed asap, use freeze and 36 cpus.
+If your data is at latitudes higher than 60 degrees, use a polar DEM. The global DEM has poor quality at higher latitudes.
+If your data is at mid-latitudes, you may want to make your own DEM. A conical projection may work very well.
